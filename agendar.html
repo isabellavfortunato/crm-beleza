@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agendar horário</title>
+<style>
+:root{
+  --bg:#FBF6F3;--surface:#FFFFFF;--ink:#3B2E33;--muted:#9A868D;
+  --plum:#834E71;--plum-deep:#5E3453;--blush:#E4A294;--blush-soft:#F6DED7;
+  --line:#EFE1DC;--sage:#7E9B86;--alert:#C56A55;
+  --font-display:'Cambria','Georgia','Times New Roman',serif;
+  --font-body:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:16px;line-height:1.45;max-width:520px;margin:0 auto;min-height:100vh;padding-bottom:40px}
+h1,h2,h3{font-family:var(--font-display);font-weight:700;line-height:1.2}
+.topo{background:var(--plum);color:#fff;padding:26px 22px 32px;border-radius:0 0 28px 28px;text-align:center}
+.topo h1{font-size:23px}
+.topo .sub{color:#F1DCE7;font-size:14px;margin-top:4px}
+.conteudo{padding:20px 16px}
+.passo{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:18px;margin-bottom:16px;box-shadow:0 2px 10px rgba(94,52,83,.06)}
+.passo h2{font-size:17px;color:var(--plum-deep);margin-bottom:12px}
+label{display:block;font-size:13px;font-weight:600;color:var(--plum-deep);margin-bottom:6px}
+input,select{width:100%;border:1.5px solid var(--line);border-radius:12px;padding:12px 14px;font-family:var(--font-body);font-size:15px;color:var(--ink);background:var(--surface);margin-bottom:12px}
+input:focus,select:focus{outline:none;border-color:var(--plum)}
+.slots{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:4px}
+.slot{border:1.5px solid var(--line);background:var(--surface);color:var(--ink);border-radius:12px;padding:12px 0;font-size:15px;font-weight:600;cursor:pointer;text-align:center;font-family:var(--font-display)}
+.slot.on{background:var(--plum);color:#fff;border-color:var(--plum)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:none;border-radius:14px;font-family:var(--font-body);font-weight:600;font-size:16px;padding:15px 18px;cursor:pointer;width:100%}
+.btn-primario{background:var(--plum);color:#fff}
+.btn-primario:disabled{opacity:.5}
+.aviso{font-size:13.5px;color:var(--muted);text-align:center;padding:14px}
+.erro{background:#FBE7E0;color:var(--alert);border-radius:12px;padding:12px 14px;font-size:14px;margin-top:6px}
+.ok-tela{text-align:center;padding:34px 22px}
+.ok-selo{width:76px;height:76px;border-radius:50%;background:#E6EFE8;color:var(--sage);display:flex;align-items:center;justify-content:center;margin:0 auto 16px}
+.ok-tela h2{font-size:22px;color:var(--plum-deep);margin-bottom:8px}
+.ok-detalhe{background:var(--blush-soft);color:var(--plum-deep);border-radius:14px;padding:16px;font-size:16px;margin:18px 0;font-family:var(--font-display);font-weight:700}
+.carregando{text-align:center;color:var(--muted);padding:20px;font-size:14px}
+</style>
+</head>
+<body>
+
+<div class="topo">
+  <h1 id="nomeNegocio">Agende o seu horário</h1>
+  <div class="sub">Escolha o dia e o horário que preferir</div>
+</div>
+
+<div class="conteudo" id="app">
+  <div class="carregando">Carregando horários disponíveis...</div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, doc, getDoc, collection, query, where, getDocs, runTransaction, serverTimestamp }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+/* ============================================================
+   COLE AQUI a configuração do seu projeto Firebase.
+   Você copia isso no console do Firebase, em configurações do
+   projeto, na seção dos seus aplicativos web.
+   ============================================================ */
+const firebaseConfig = {
+  apiKey: "AIzaSyBTue2z0zSOIhDLBdAefQJLiraunm_MedY",
+  authDomain: "crm-beleza.firebaseapp.com",
+  projectId: "crm-beleza",
+  storageBucket: "crm-beleza.firebasestorage.app",
+  messagingSenderId: "319621333144",
+  appId: "1:319621333144:web:ea6574df42da6f206210ed"
+};
+
+/* Cole o endereço do seu Apps Script para gravar no Google Calendar.
+   Se deixar em branco, o agendamento funciona normalmente sem o Calendar. */
+const URL_CALENDAR = "";
+
+/* ------------------------------------------------------------ */
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+let config = null;
+let escolha = { servico:'', data:'', horario:'' };
+const appEl = document.getElementById('app');
+
+/* Utilidades de data */
+function hojeIso(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function dataDeIso(iso){ const p=iso.split('-'); return new Date(+p[0],+p[1]-1,+p[2]); }
+function slotId(data,horario){ return data+'T'+horario.replace(':',''); }
+function minutos(hhmm){ const p=hhmm.split(':'); return (+p[0])*60+(+p[1]); }
+function paraHHMM(m){ return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0'); }
+const meses=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+const semanaNomes=['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado'];
+function dataPorExtenso(iso){ const d=dataDeIso(iso); return semanaNomes[d.getDay()]+', '+d.getDate()+' de '+meses[d.getMonth()]; }
+
+/* Início */
+async function iniciar(){
+  try{
+    await signInAnonymously(auth);
+    const snap = await getDoc(doc(db,'configuracao','disponibilidade'));
+    if(!snap.exists()){ appEl.innerHTML = '<div class="aviso">A agenda ainda não está configurada. Tente novamente mais tarde.</div>'; return; }
+    config = snap.data();
+    if(config.nomeNegocio) document.getElementById('nomeNegocio').textContent = config.nomeNegocio;
+    montarFormulario();
+  }catch(e){
+    console.error(e);
+    appEl.innerHTML = '<div class="erro">Não foi possível carregar a agenda agora. Verifique a conexão e tente de novo.</div>';
+  }
+}
+
+/* Formulário */
+function montarFormulario(){
+  let html = '<div class="passo">';
+  html += '<h2>Sobre o atendimento</h2>';
+  if(config.servicos && config.servicos.length){
+    html += '<label>Serviço</label><select id="sel-servico">';
+    config.servicos.forEach(s=>{ html += '<option>'+s+'</option>'; });
+    html += '</select>';
+  }
+  const min = hojeIso();
+  const maxD = dataDeIso(hojeIso()); maxD.setDate(maxD.getDate()+(config.diasAntecedencia||30));
+  const max = maxD.getFullYear()+'-'+String(maxD.getMonth()+1).padStart(2,'0')+'-'+String(maxD.getDate()).padStart(2,'0');
+  html += '<label>Dia</label><input type="date" id="sel-data" min="'+min+'" max="'+max+'">';
+  html += '</div>';
+  html += '<div class="passo" id="passo-slots" style="display:none"><h2>Horários livres</h2><div id="lista-slots"></div></div>';
+  html += '<div class="passo" id="passo-dados" style="display:none"><h2>Seus dados</h2>'
+        + '<label>Nome</label><input id="in-nome" placeholder="Seu nome">'
+        + '<label>Telefone com WhatsApp</label><input id="in-tel" type="tel" placeholder="21 99999-9999">'
+        + '<div id="erro-envio"></div>'
+        + '<button class="btn btn-primario" id="btn-confirmar">Confirmar agendamento</button></div>';
+  appEl.innerHTML = html;
+
+  const selData = document.getElementById('sel-data');
+  selData.addEventListener('change', ()=>{ escolha.data = selData.value; escolha.horario=''; carregarSlots(); });
+  const selServ = document.getElementById('sel-servico');
+  if(selServ){ escolha.servico = selServ.value; selServ.addEventListener('change',()=>{ escolha.servico=selServ.value; }); }
+  document.getElementById('btn-confirmar').addEventListener('click', confirmar);
+}
+
+/* Gera os horários do dia a partir das faixas configuradas */
+function gerarHorarios(data){
+  const dia = dataDeIso(data).getDay();
+  const faixas = (config.semana && config.semana[String(dia)]) || [];
+  const dur = config.duracaoSlot || 60;
+  const lista = [];
+  faixas.forEach(f=>{
+    const p = String(f).split('-');
+    let ini = minutos(p[0].trim()); const fim = minutos(p[1].trim());
+    while(ini + dur <= fim){ lista.push(paraHHMM(ini)); ini += dur; }
+  });
+  return lista;
+}
+
+/* Carrega horários livres do dia escolhido */
+async function carregarSlots(){
+  const passo = document.getElementById('passo-slots');
+  const lista = document.getElementById('lista-slots');
+  document.getElementById('passo-dados').style.display='none';
+  passo.style.display='block';
+  lista.innerHTML = '<div class="carregando">Buscando horários...</div>';
+
+  if((config.bloqueios||[]).includes(escolha.data)){
+    lista.innerHTML = '<div class="aviso">Não há atendimento neste dia. Escolha outra data.</div>'; return;
+  }
+  let horarios = gerarHorarios(escolha.data);
+  if(horarios.length===0){ lista.innerHTML = '<div class="aviso">Não há atendimento neste dia. Escolha outra data.</div>'; return; }
+
+  /* Remove horários já ocupados */
+  const ocup = await getDocs(query(collection(db,'ocupacao'), where('data','==',escolha.data)));
+  const ocupados = new Set(); ocup.forEach(d=>ocupados.add(d.data().horario));
+  const bloqueios = new Set(config.bloqueios||[]);
+
+  /* Remove horários passados do dia de hoje respeitando a antecedência */
+  const agora = new Date();
+  const ehHoje = escolha.data===hojeIso();
+  const antecedencia = config.antecedenciaMin||0;
+
+  horarios = horarios.filter(h=>{
+    if(ocupados.has(h)) return false;
+    if(bloqueios.has(slotId(escolha.data,h))) return false;
+    if(ehHoje){ const limite = agora.getHours()*60+agora.getMinutes()+antecedencia; if(minutos(h) <= limite) return false; }
+    return true;
+  });
+
+  if(horarios.length===0){ lista.innerHTML = '<div class="aviso">Todos os horários deste dia já foram preenchidos. Escolha outra data.</div>'; return; }
+
+  let html = '<div class="slots">';
+  horarios.forEach(h=>{ html += '<button class="slot" data-h="'+h+'">'+h+'</button>'; });
+  html += '</div>';
+  lista.innerHTML = html;
+  lista.querySelectorAll('.slot').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      lista.querySelectorAll('.slot').forEach(x=>x.classList.remove('on'));
+      b.classList.add('on');
+      escolha.horario = b.dataset.h;
+      document.getElementById('passo-dados').style.display='block';
+      document.getElementById('passo-dados').scrollIntoView({behavior:'smooth'});
+    });
+  });
+}
+
+/* Confirma com transação para impedir horário duplicado */
+async function confirmar(){
+  const nome = document.getElementById('in-nome').value.trim();
+  const tel = document.getElementById('in-tel').value.trim();
+  const erroEl = document.getElementById('erro-envio');
+  const btn = document.getElementById('btn-confirmar');
+  erroEl.innerHTML='';
+  if(!escolha.data || !escolha.horario){ erroEl.innerHTML='<div class="erro">Escolha um dia e um horário.</div>'; return; }
+  if(!nome){ erroEl.innerHTML='<div class="erro">Informe o seu nome.</div>'; return; }
+  if(!tel){ erroEl.innerHTML='<div class="erro">Informe o seu telefone.</div>'; return; }
+
+  btn.disabled=true; btn.textContent='Confirmando...';
+  const sid = slotId(escolha.data, escolha.horario);
+  try{
+    await runTransaction(db, async (tx)=>{
+      const ocupRef = doc(db,'ocupacao',sid);
+      const jaTem = await tx.get(ocupRef);
+      if(jaTem.exists()) throw new Error('OCUPADO');
+      tx.set(ocupRef, { data:escolha.data, horario:escolha.horario, criadoEm:serverTimestamp() });
+      tx.set(doc(db,'agendamentos',sid), {
+        nome, telefone:tel, servico:escolha.servico||'', data:escolha.data, horario:escolha.horario,
+        status:'marcado', origem:'cliente', criadoEm:serverTimestamp()
+      });
+    });
+  }catch(e){
+    btn.disabled=false; btn.textContent='Confirmar agendamento';
+    if(e.message==='OCUPADO'){ erroEl.innerHTML='<div class="erro">Esse horário acabou de ser reservado. Escolha outro, por favor.</div>'; carregarSlots(); }
+    else { erroEl.innerHTML='<div class="erro">Não foi possível concluir agora. Tente novamente.</div>'; }
+    return;
+  }
+
+  /* Grava no Google Calendar sem travar a confirmação em caso de falha */
+  if(URL_CALENDAR){
+    try{
+      await fetch(URL_CALENDAR, { method:'POST', body: JSON.stringify({
+        nome, telefone:tel, servico:escolha.servico||'', data:escolha.data, horario:escolha.horario, duracao:config.duracaoSlot||60
+      })});
+    }catch(e){ console.warn('Calendar falhou, agendamento segue válido', e); }
+  }
+  telaConfirmada(nome);
+}
+
+function telaConfirmada(nome){
+  appEl.innerHTML = '<div class="ok-tela">'
+    + '<div class="ok-selo"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg></div>'
+    + '<h2>Agendamento confirmado</h2>'
+    + '<p style="color:var(--muted)">Prontinho, '+nome.split(' ')[0]+'. Seu horário está reservado.</p>'
+    + '<div class="ok-detalhe">'+dataPorExtenso(escolha.data)+'<br>às '+escolha.horario+'</div>'
+    + '<p style="color:var(--muted);font-size:14px">Se precisar remarcar, entre em contato.</p></div>';
+}
+
+iniciar();
+</script>
+</body>
+</html>

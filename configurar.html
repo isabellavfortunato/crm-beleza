@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Configurar disponibilidade</title>
+<style>
+:root{
+  --bg:#FBF6F3;--surface:#FFFFFF;--ink:#3B2E33;--muted:#9A868D;
+  --plum:#834E71;--plum-deep:#5E3453;--blush:#E4A294;--blush-soft:#F6DED7;
+  --line:#EFE1DC;--sage:#7E9B86;--alert:#C56A55;
+  --font-display:'Cambria','Georgia','Times New Roman',serif;
+  --font-body:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',Arial,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:16px;line-height:1.45;max-width:560px;margin:0 auto;min-height:100vh;padding-bottom:40px}
+h1,h2{font-family:var(--font-display);font-weight:700;line-height:1.2}
+.topo{background:var(--plum);color:#fff;padding:24px 22px 30px;border-radius:0 0 26px 26px}
+.topo h1{font-size:22px}
+.topo .sub{color:#F1DCE7;font-size:13.5px;margin-top:4px}
+.conteudo{padding:20px 16px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:18px;margin-bottom:16px;box-shadow:0 2px 10px rgba(94,52,83,.06)}
+.card h2{font-size:17px;color:var(--plum-deep);margin-bottom:14px}
+label{display:block;font-size:13px;font-weight:600;color:var(--plum-deep);margin-bottom:6px}
+input,textarea{width:100%;border:1.5px solid var(--line);border-radius:12px;padding:12px 14px;font-family:var(--font-body);font-size:15px;color:var(--ink);background:var(--surface);margin-bottom:14px}
+input:focus,textarea:focus{outline:none;border-color:var(--plum)}
+textarea{resize:vertical;min-height:80px}
+.dois{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.btn{display:inline-flex;align-items:center;justify-content:center;border:none;border-radius:14px;font-family:var(--font-body);font-weight:600;font-size:16px;padding:15px 18px;cursor:pointer;width:100%}
+.btn-primario{background:var(--plum);color:#fff}
+.btn-primario:disabled{opacity:.5}
+.dia{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.dia .chk{width:auto;margin:0;flex:0 0 auto}
+.dia .nome{width:96px;font-size:13.5px;font-weight:600;color:var(--plum-deep);flex:0 0 auto}
+.dia input[type=text]{margin:0}
+.aviso{font-size:13px;line-height:1.5;border-radius:12px;padding:12px 14px;margin-bottom:14px}
+.aviso.erro{background:#FBE7E0;color:var(--alert)}
+.aviso.ok{background:#E6EFE8;color:#4d6b56}
+.aviso.info{background:#FBF1DC;color:#7A5E1E}
+.oculto{display:none}
+.ajuda{font-size:12px;color:var(--muted);margin-top:-8px;margin-bottom:14px}
+</style>
+</head>
+<body>
+
+<div class="topo">
+  <h1>Configurar a sua agenda</h1>
+  <div class="sub">Preencha os seus horários e serviços. Ao salvar, tudo vai direto para o Firebase.</div>
+</div>
+
+<div class="conteudo">
+  <div id="area-login">
+    <div class="card">
+      <h2>Entrar</h2>
+      <div id="msg-login"></div>
+      <label>Email de administração</label>
+      <input id="in-email" type="email" value="isavfortunato@gmail.com">
+      <label>Senha</label>
+      <input id="in-senha" type="password" placeholder="A senha que você criou na autenticação">
+      <button class="btn btn-primario" id="btn-entrar">Entrar</button>
+    </div>
+  </div>
+
+  <div id="area-form" class="oculto">
+    <div id="msg-form"></div>
+    <div class="card">
+      <h2>Dados do negócio</h2>
+      <label>Nome do negócio</label>
+      <input id="f-nome" placeholder="Como aparece na página de agendamento">
+      <div class="dois">
+        <div><label>Duração de cada atendimento em minutos</label><input id="f-duracao" type="number" value="60"></div>
+        <div><label>Antecedência mínima em minutos</label><input id="f-antec" type="number" value="120"></div>
+      </div>
+      <label>Até quantos dias para a frente aceita agendamento</label>
+      <input id="f-dias" type="number" value="30">
+    </div>
+
+    <div class="card">
+      <h2>Serviços que a cliente pode escolher</h2>
+      <label>Um serviço por linha</label>
+      <textarea id="f-servicos" style="min-height:120px"></textarea>
+    </div>
+
+    <div class="card">
+      <h2>Horários de atendimento</h2>
+      <p class="ajuda">Marque os dias em que você atende e escreva as faixas de horário. Para intervalo de almoço, separe por vírgula. Exemplo, 09:00-12:00, 13:00-18:00.</p>
+      <div id="semana"></div>
+    </div>
+
+    <div class="card">
+      <h2>Dias sem atendimento</h2>
+      <label>Datas que você quer fechar, uma por linha, no formato dia barra mês barra ano</label>
+      <textarea id="f-bloqueios" placeholder="20/03/2026"></textarea>
+      <p class="ajuda">Pode deixar em branco. Serve para feriados e folgas.</p>
+    </div>
+
+    <button class="btn btn-primario" id="btn-salvar">Salvar a agenda</button>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBTue2z0zSOIhDLBdAefQJLiraunm_MedY",
+  authDomain: "crm-beleza.firebaseapp.com",
+  projectId: "crm-beleza",
+  storageBucket: "crm-beleza.firebasestorage.app",
+  messagingSenderId: "319621333144",
+  appId: "1:319621333144:web:ea6574df42da6f206210ed"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+const diasNomes = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+const servicosPadrao = ['Extensão de cílios','Manutenção de cílios','Manicure','Design de sobrancelhas','Limpeza de pele'];
+const padraoSemana = { '1':'09:00-18:00','2':'09:00-18:00','3':'09:00-18:00','4':'09:00-18:00','5':'09:00-18:00' };
+
+// Monta as linhas dos dias da semana
+function montarSemana(valores){
+  const alvo = document.getElementById('semana');
+  let html = '';
+  for(let d=0; d<7; d++){
+    const faixas = valores && valores[String(d)] ? valores[String(d)].join(', ') : (padraoSemana[String(d)]||'');
+    const marcado = faixas ? 'checked' : '';
+    html += '<div class="dia"><input type="checkbox" class="chk" id="chk-'+d+'" '+marcado+'><div class="nome">'+diasNomes[d]+'</div><input type="text" id="fx-'+d+'" value="'+faixas+'" placeholder="09:00-18:00"></div>';
+  }
+  alvo.innerHTML = html;
+}
+
+function msg(area, tipo, texto){
+  document.getElementById(area).innerHTML = '<div class="aviso '+tipo+'">'+texto+'</div>';
+}
+
+// Login
+document.getElementById('btn-entrar').addEventListener('click', async ()=>{
+  const email = document.getElementById('in-email').value.trim();
+  const senha = document.getElementById('in-senha').value;
+  const btn = document.getElementById('btn-entrar');
+  btn.disabled = true; btn.textContent = 'Entrando...';
+  try{
+    await signInWithEmailAndPassword(auth, email, senha);
+    document.getElementById('area-login').classList.add('oculto');
+    document.getElementById('area-form').classList.remove('oculto');
+    await carregarExistente();
+  }catch(e){
+    console.error(e);
+    let t = 'Não foi possível entrar. Confira o email e a senha.';
+    if(e.code==='auth/invalid-credential' || e.code==='auth/wrong-password') t = 'Email ou senha incorretos. Se ainda não criou o seu usuário, faça isso na autenticação do Firebase.';
+    if(e.code==='auth/user-not-found') t = 'Esse email ainda não foi cadastrado na autenticação do Firebase.';
+    msg('msg-login','erro', t);
+    btn.disabled = false; btn.textContent = 'Entrar';
+  }
+});
+
+// Carrega configuração existente, se houver, para editar
+async function carregarExistente(){
+  document.getElementById('f-servicos').value = servicosPadrao.join('\n');
+  try{
+    const snap = await getDoc(doc(db,'configuracao','disponibilidade'));
+    if(snap.exists()){
+      const c = snap.data();
+      if(c.nomeNegocio) document.getElementById('f-nome').value = c.nomeNegocio;
+      if(c.duracaoSlot) document.getElementById('f-duracao').value = c.duracaoSlot;
+      if(c.antecedenciaMin!=null) document.getElementById('f-antec').value = c.antecedenciaMin;
+      if(c.diasAntecedencia) document.getElementById('f-dias').value = c.diasAntecedencia;
+      if(Array.isArray(c.servicos) && c.servicos.length) document.getElementById('f-servicos').value = c.servicos.join('\n');
+      if(Array.isArray(c.bloqueios)) document.getElementById('f-bloqueios').value = c.bloqueios.map(paraDataBR).join('\n');
+      montarSemana(c.semana||null);
+      return;
+    }
+  }catch(e){ console.warn(e); }
+  montarSemana(null);
+}
+
+// Converte 2026-03-20 para 20/03/2026 na exibição dos bloqueios
+function paraDataBR(iso){
+  if(!iso || iso.indexOf('T')>=0) return iso;
+  const p = String(iso).split('-');
+  if(p.length===3) return p[2]+'/'+p[1]+'/'+p[0];
+  return iso;
+}
+// Converte 20/03/2026 para 2026-03-20
+function paraIso(br){
+  const p = String(br).trim().split(/[\/\-.]/);
+  if(p.length===3){ return p[2]+'-'+String(+p[1]).padStart(2,'0')+'-'+String(+p[0]).padStart(2,'0'); }
+  return br.trim();
+}
+
+// Salvar
+document.getElementById('btn-salvar').addEventListener('click', async ()=>{
+  const btn = document.getElementById('btn-salvar');
+  const semana = {};
+  for(let d=0; d<7; d++){
+    const marcado = document.getElementById('chk-'+d).checked;
+    const txt = document.getElementById('fx-'+d).value.trim();
+    if(marcado && txt){ semana[String(d)] = txt.split(',').map(s=>s.trim()).filter(Boolean); }
+  }
+  const servicos = document.getElementById('f-servicos').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  const bloqueios = document.getElementById('f-bloqueios').value.split('\n').map(s=>s.trim()).filter(Boolean).map(paraIso);
+
+  const dados = {
+    nomeNegocio: document.getElementById('f-nome').value.trim(),
+    duracaoSlot: parseInt(document.getElementById('f-duracao').value)||60,
+    antecedenciaMin: parseInt(document.getElementById('f-antec').value)||0,
+    diasAntecedencia: parseInt(document.getElementById('f-dias').value)||30,
+    servicos, semana, bloqueios
+  };
+
+  if(Object.keys(semana).length===0){ msg('msg-form','erro','Marque pelo menos um dia de atendimento com um horário.'); window.scrollTo(0,0); return; }
+
+  btn.disabled = true; btn.textContent = 'Salvando...';
+  try{
+    await setDoc(doc(db,'configuracao','disponibilidade'), dados);
+    msg('msg-form','ok','Agenda salva com sucesso. A sua página de agendamento já está pronta para receber clientes.');
+    window.scrollTo(0,0);
+  }catch(e){
+    console.error(e);
+    let t = 'Não foi possível salvar.';
+    if(e.code==='permission-denied') t = 'O Firebase recusou a gravação. Confira se você já publicou as regras de segurança e se entrou com o email de administração.';
+    msg('msg-form','erro', t);
+    window.scrollTo(0,0);
+  }
+  btn.disabled = false; btn.textContent = 'Salvar a agenda';
+});
+</script>
+</body>
+</html>
